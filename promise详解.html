@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+    <html>
+    <head>
+        <meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+        <title>Promises 详解</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.10.0/dist/katex.min.css" integrity="sha384-9eLZqc9ds8eNjO3TmqPeYcDj8n+Qfa4nuSiGYa6DjLNcv9BtN69ZIulL9+8CqC9Y" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+        <link href="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.css" rel="stylesheet" type="text/css">
+        <style>
+.task-list-item { list-style-type: none; } .task-list-item-checkbox { margin-left: -20px; vertical-align: middle; }
+</style>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        
+        <script src="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.js"></script>
+    </head>
+    <body>
+        <h1 id="promises-%E8%AF%A6%E8%A7%A3">Promises 详解</h1>
+<p>Promise 的出现，原本是为了解决回调地狱的问题。它允许你为异步代码执行结果的成功和失败分别绑定相应的处理方法。这让异步方法可以像同步方法那样返回值，但是并非立即返回执行的结果，而是返回一个 Promise 对象。</p>
+<h2 id="%E5%A6%82%E4%BD%95%E5%88%9B%E5%BB%BA-promises">如何创建 Promises</h2>
+<p>和普通 JavaScript 对象一样，同样是通过<code>new</code>关键词来创建一个 Promise 对象实例。构造函数只接收一个参数，且该参数必须是一个函数，任何其他的值比如 undefined、null、true 等都会报一个 TypeError 的错误。同样，如果你没有通过<code>new</code>关键词创建，而是直接执行<code>Promise()</code>，同样也会报一个 TypeError 的错误。</p>
+<pre><code class="language-js"><div><span class="hljs-keyword">var</span> promise = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">resolve, reject</span>) </span>{
+    <span class="hljs-comment">// 进行一些异步操作</span>
+    <span class="hljs-comment">// 然后调用resolve或reject方法</span>
+});
+</div></code></pre>
+<p>创建Promise实例时传入的函数，同时还接受两个参数，它们分别对应Promise内部实现的两个方法。</p>
+<pre><code class="language-js"><div><span class="hljs-keyword">const</span> setDelay = <span class="hljs-function">(<span class="hljs-params">time</span>) =&gt;</span> {
+  <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>)=&gt;</span>{
+    <span class="hljs-keyword">if</span> (<span class="hljs-keyword">typeof</span> time != <span class="hljs-string">'number'</span>) reject(<span class="hljs-keyword">new</span> <span class="hljs-built_in">Error</span>(<span class="hljs-string">'参数必须是number类型'</span>));
+    setTimeout(<span class="hljs-function"><span class="hljs-params">()</span>=&gt;</span> {
+      resolve(<span class="hljs-string">`我延迟了<span class="hljs-subst">${time}</span>毫秒后输出的`</span>)
+    }, time)
+  });
+}
+</div></code></pre>
+<h2 id="promise-%E7%9A%84%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90">Promise 的原理分析</h2>
+<p>Promise 本质是一个状态机。每个 promise 只能是 3 种状态中的一种：</p>
+<ul>
+<li>pending：初始状态；</li>
+<li>fulfilled：操作成功，状态不可变，且需要有一个最终值；</li>
+<li>rejected：操作失败，状态不可变，且需要有一个拒绝原因。</li>
+</ul>
+<p>pending 是对象创建后的初始状态，当对象操作成功时变为 fulfilled，当对象 操作失败时变为 rejected。状态转变只能是 pending -&gt; fulfilled 或者 pending -&gt; rejected，状态转变不可逆。</p>
+<h2 id="promise-%E5%AE%9E%E4%BE%8B%E6%96%B9%E6%B3%95%E4%BB%8B%E7%BB%8D">Promise 实例方法介绍</h2>
+<p>Promise 对象拥有两个实例方法<code>then()</code>和<code>catch()</code>。</p>
+<h3 id="promiseprototypethenresolve-reject">Promise.prototype.then(resolve, reject)</h3>
+<p>每一个 promise 都会提供一个 then 方法，用于链式调用，每次执行时都会返回一个新的 promise 对象：</p>
+<pre><code class="language-js"><div><span class="hljs-keyword">var</span> promise = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">resolve, reject</span>) </span>{
+  <span class="hljs-keyword">if</span>(<span class="hljs-comment">/* 逻辑判断 */</span>) { <span class="hljs-comment">//异步操作成功</span>
+    resolve(result);
+  } <span class="hljs-keyword">else</span> { <span class="hljs-comment">//异步操作失败</span>
+    reject(error);
+  }
+});
+
+promise.then(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">result</span>) </span>{
+  <span class="hljs-comment">// 完成态，result 是上面 resolve 传入的值</span>
+  <span class="hljs-built_in">console</span>.log(result);
+}, <span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">error</span>) </span>{
+  <span class="hljs-comment">// 失败态，error 是上面 reject 传入的值</span>
+  <span class="hljs-built_in">console</span>.log(error);
+});
+</div></code></pre>
+<p>从上面这个例子可以看出 <code>then()</code> 接收两个参数，且通常都是函数。第二个参数是可选的，不一定要提供。当 promise 状态 fulfilled 时，会把 <code>resolve(value)</code> 中的 value 值传给 then 的第一个参数中，同理，当 promise 状态 reject 时，会把 <code>reject(reason)</code> 中的 reason 值传给 then 的第二个参数。</p>
+<h4 id="es6-%E5%B7%B2%E7%BB%8F%E6%94%AF%E6%8C%81-promise">ES6 已经支持 Promise：</h4>
+<pre><code class="language-js"><div><span class="hljs-keyword">var</span> promise = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>) =&gt;</span> {
+  setTimeout(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params"></span>) </span>{
+    resolve(<span class="hljs-string">'完成'</span>);
+  }, <span class="hljs-number">10</span>);
+});
+
+promise.then(<span class="hljs-function">(<span class="hljs-params">msg</span>) =&gt;</span> {
+  <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'first messaeg: '</span> + msg); <span class="hljs-comment">//first messaeg:完成</span>
+})
+</div></code></pre>
+<h4 id="%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3-then-%E6%96%B9%E6%B3%95">深入理解 then 方法：</h4>
+<pre><code class="language-js"><div><span class="hljs-keyword">var</span> promise = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>) =&gt;</span> {
+  setTimeout(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params"></span>) </span>{
+    resolve(<span class="hljs-string">'完成'</span>);
+  }, <span class="hljs-number">10</span>);
+});
+
+promise.then(<span class="hljs-function">(<span class="hljs-params">msg</span>) =&gt;</span> {
+  <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'first messaeg: '</span> + msg); <span class="hljs-comment">// first messaeg: 完成</span>
+}).then(<span class="hljs-function">(<span class="hljs-params">msg</span>) =&gt;</span> {
+  <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'second messaeg: '</span> + msg); <span class="hljs-comment">// second messaeg:undefined</span>
+});
+</div></code></pre>
+<p>输出两行信息：我们发现第二个 then 方法接收到的最终值是 undefined ，为什么呢？这是调用第一个 then 方法后，返回 promise 最终值为 undefined ，传递给第二个 then 的回调，如果把上面的例子稍加改动：</p>
+<pre><code class="language-js"><div><span class="hljs-keyword">var</span> promise = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>) =&gt;</span> {
+  setTimeout(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params"></span>) </span>{
+    resolve(<span class="hljs-string">'完成'</span>);
+  }, <span class="hljs-number">10</span>);
+});
+
+promise.then(<span class="hljs-function">(<span class="hljs-params">msg</span>) =&gt;</span> {
+  <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'first messaeg: '</span> + msg); <span class="hljs-comment">// first messaeg: 完成</span>
+  <span class="hljs-keyword">return</span> msg + <span class="hljs-string">'第二次'</span>;
+}).then(<span class="hljs-function">(<span class="hljs-params">msg</span>) =&gt;</span> {
+  <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'second messaeg: '</span> + msg); <span class="hljs-comment">// second messaeg:完成第二次</span>
+});
+</div></code></pre>
+<p>这次两个 then 方法的回调都接收到了最终值，正如我们前文所说，then 方法返回一个新 promise ，并且该新 promise 根据其传入的回调执行的返回值，进行决议，而函数未明确 return 返回值时，默认返回的是 undefined ，这也是上面实例第二个 then 方法的回调接收 undefined 参数的原因。</p>
+<p>这里使用了链式调用，共产生三个 promise，初始 promise ，两个 then 方法分别返回一个 promise ；而第一个 then 方法返回的新 promise 是第二个 then 方法的主体，而不是初始 promise 。</p>
+<p>再看下一个例子就能明白了：</p>
+<pre><code class="language-js"><div><span class="hljs-keyword">var</span> promise = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>) =&gt;</span> {
+  setTimeout(<span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span> resolve(<span class="hljs-string">'1'</span>), <span class="hljs-number">1000</span>);
+});
+
+promise.then( <span class="hljs-function"><span class="hljs-params">result</span> =&gt;</span> {
+  <span class="hljs-built_in">console</span>.log(result); <span class="hljs-comment">//1</span>
+  <span class="hljs-keyword">return</span> <span class="hljs-string">'2'</span>;
+}).then( <span class="hljs-function"><span class="hljs-params">result</span> =&gt;</span> {
+  <span class="hljs-built_in">console</span>.log(result); <span class="hljs-comment">//2</span>
+  <span class="hljs-keyword">return</span> <span class="hljs-string">'3'</span>;
+}).then( <span class="hljs-function"><span class="hljs-params">result</span> =&gt;</span> {
+  <span class="hljs-built_in">console</span>.log(result); <span class="hljs-comment">//3</span>
+});
+</div></code></pre>
+<h3 id="promiseprototypecatchonrejected">Promise.prototype.catch(onRejected)</h3>
+<p>该方法为 promise 添加拒绝回调函数，将返回一个新 promise ，该新 promise 根据回调函数执行的返回值进行决议；若 promise 决议为完成状态，则新 promise 根据其最终值进行决议。</p>
+<pre><code class="language-js"><div><span class="hljs-keyword">var</span> promise = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>) =&gt;</span> {
+  setTimeout(<span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span> {
+    reject(<span class="hljs-string">'failed'</span>);
+  }, <span class="hljs-number">0</span>);
+});
+
+<span class="hljs-keyword">var</span> promise2 = promise.catch(<span class="hljs-function">(<span class="hljs-params">reason</span>) =&gt;</span> {
+  <span class="hljs-built_in">console</span>.log(reason); <span class="hljs-comment">// failed</span>
+  <span class="hljs-keyword">return</span> <span class="hljs-string">'successed'</span>;
+});
+
+<span class="hljs-keyword">var</span> promise3 = promise.catch(<span class="hljs-function">(<span class="hljs-params">reason</span>) =&gt;</span> {
+  <span class="hljs-built_in">console</span>.log(reason); <span class="hljs-comment">// failed</span>
+});
+
+<span class="hljs-keyword">var</span> promise4 = promise.catch(<span class="hljs-function">(<span class="hljs-params">reason</span>) =&gt;</span> {
+  <span class="hljs-built_in">console</span>.log(reason); <span class="hljs-comment">// failed</span>
+  <span class="hljs-keyword">throw</span> <span class="hljs-string">'failed 2'</span>; <span class="hljs-comment">// Uncaught (in promise) failed 2</span>
+});
+</div></code></pre>
+<ul>
+<li>
+<p>catch 会为 promise 注册拒绝回调函数，一旦异步操作结束，调用了 reject 回调函数，则依次执行注册的拒绝回调；</p>
+</li>
+<li>
+<p>另外有一点和 then 方法相似，catch 方法返回的新 promise 将使用其回调函数执行的返回值进行决议，如 promise2 , promise3 状态均为完成（resolved），但是 promise3 最终值为 undefined ，而 promise2 最终值为 successed ，这是因为在调用 <code>promise.catch</code> 方法时，传入的回调没有显式的设置返回值；</p>
+</li>
+<li>
+<p>对于 promise4 ，由于调用 catch 方法时，回调中 throw 抛出异常，所以 promise4 状态为拒绝（rejected），拒绝原因为抛出的异常；</p>
+</li>
+<li>
+<p>特别需要注意的是这里一共有四个 promise ，一旦决议，它们之间都是独立的，我们需要明白无论是 then 方法，还是 catch 方法，都会返回一个新 promise ，此新 promise 与初始 promise 相互独立。</p>
+</li>
+<li>
+<p>catch 方法和 then 方法的第二个参数一样，都是为 promise 注册拒绝回调。</p>
+</li>
+</ul>
+<h3 id="promisethen-%E9%93%BE%E5%BC%8F%E5%86%99%E6%B3%95">Promise.then() 链式写法</h3>
+<pre><code class="language-js"><div>p1.then(<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">taskA</span>(<span class="hljs-params">value</span>) </span>{ 
+  <span class="hljs-comment">// task A</span>
+}).then(<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">taskB</span>(<span class="hljs-params">vaue</span>)</span>{
+  <span class="hljs-comment">// task B</span>
+}).catch(<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">onRejected</span>(<span class="hljs-params">error</span>)</span>{ <span class="hljs-comment">//最后catch 统一捕捉异常</span>
+  <span class="hljs-built_in">console</span>.log(error);
+});
+</div></code></pre>
+<blockquote>
+<p>总结：调用 <code>.then()</code> 和 <code>.catch()</code> 时都会创建一个新的 Promise。这个新的 Promise 可以继续使用 then 或者 catch 方法。</p>
+</blockquote>
+<h2 id="promise%E9%9D%99%E6%80%81%E6%96%B9%E6%B3%95">Promise静态方法</h2>
+<h3 id="promiseresolvevalue">Promise.resolve(value)</h3>
+<p>Promise.resolve(value) 可以认为是 new Promise() 方法的快捷方式。</p>
+<pre><code class="language-js"><div><span class="hljs-comment">//比如 Promise.resolve(666); 可以认为是以下代码的语法糖。</span>
+<span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">resolve</span>)</span>{ 
+  resolve(<span class="hljs-number">666</span>);
+});
+</div></code></pre>
+<p>在这段代码中的 resolve(666);会让这个 promise 对象立即进入确定(即 resolved )状态,并将 666 传递给后面 then 里所指定的 onFulfilled 函数。</p>
+<pre><code class="language-js"><div><span class="hljs-built_in">Promise</span>.resolve(<span class="hljs-number">666</span>).then(
+  <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">value</span>) </span>{
+    <span class="hljs-built_in">console</span>.log(value)  <span class="hljs-comment">//666</span>
+  }
+);
+</div></code></pre>
+<p>Promise.resolve 方法另一个作用就是将 thenable 对象转换为 promise 对象。</p>
+<blockquote>
+<blockquote>
+<p>thenable对象：简单来说它就是一个非常类似 promise 的东西(就像我们有时称具有 <code>.length</code> 方法的非数组对象为 Arraylike 一样, thenable 指的是一个具有 <code>.then</code>  方法的对象。)</p>
+</blockquote>
+</blockquote>
+<ul>
+<li>最简单的例子就是 <code>jQuery.ajax()</code>,它的返回值就是 thenable 的,因为 <code>jQuery.ajax()</code> 的返回值是 jqXHRObject 对象,这个对象具有 <code>.then</code> 方法；</li>
+<li>用 Promise.resolve 来转换为一个 promise 对象。变成了 promse 对象的话,就能直接使用 then 或者 catch 等这些在 ES6 Promises 里定 义的方法了。</li>
+</ul>
+<pre><code class="language-js"><div><span class="hljs-keyword">var</span> promise = <span class="hljs-built_in">Promise</span>.resolve(
+  $.ajax(<span class="hljs-string">'/json/comment.json'</span>)
+) <span class="hljs-comment">// =&gt; promise对象 </span>
+
+promise.then(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">value</span>)</span>{
+  <span class="hljs-built_in">console</span>.log(value); 
+});
+</div></code></pre>
+<h3 id="promiserejecterror">Promise.reject(error)</h3>
+<p>Promise.reject(error) 是和 Promise.resolve(value) 类似的静态方法。</p>
+<pre><code class="language-js"><div><span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(
+  <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params">resolve,reject</span>) </span>{ 
+    reject(<span class="hljs-keyword">new</span> <span class="hljs-built_in">Error</span>(<span class="hljs-string">"出错了"</span>));
+  }
+);
+
+<span class="hljs-comment">// 是Promise.reject(newError("出错了"))的语法糖。</span>
+<span class="hljs-comment">//如下:</span>
+<span class="hljs-built_in">Promise</span>.reject(<span class="hljs-keyword">new</span> <span class="hljs-built_in">Error</span>(<span class="hljs-string">"出错了!"</span>)).catch(
+  <span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">error</span>)</span>{ 
+    <span class="hljs-built_in">console</span>.error(error);
+  }
+);
+</div></code></pre>
+<h3 id="promisealliterable">Promise.all(iterable)</h3>
+<p>接受一个或多个 promsie（以数组方式传递），返回一个新 promise，该 promise 状态取决于传入的参数中的所有 promsie 的状态：</p>
+<ul>
+<li>当所有 promise 都完成是，返回的 promise 完成，其最终值为由所有完成 promsie 的最终值组成的数组；</li>
+<li>当某一 promise 被拒绝时，则返回的 promise 被拒绝，其拒绝原因为第一个被拒绝 promise 的拒绝原因；</li>
+</ul>
+<pre><code class="language-js"><div><span class="hljs-keyword">var</span> p1 = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>) =&gt;</span> {
+  setTimeout(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params"></span>)</span>{
+    <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'p1决议'</span>);
+    resolve(<span class="hljs-string">'p1'</span>);
+  }, <span class="hljs-number">10</span>);
+});
+
+<span class="hljs-keyword">var</span> p2 = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>) =&gt;</span> {
+  setTimeout(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params"></span>)</span>{
+    <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'p2决议'</span>);
+    resolve(<span class="hljs-string">'p2'</span>);
+  }, <span class="hljs-number">10</span>);
+});
+
+<span class="hljs-built_in">Promise</span>.all( [p1, p2] )
+  .then(<span class="hljs-function">(<span class="hljs-params">msgs</span>) =&gt;</span> {
+    <span class="hljs-comment">// p1和p2完成并传入最终值</span>
+    <span class="hljs-built_in">console</span>.log(<span class="hljs-built_in">JSON</span>.stringify(msgs)); <span class="hljs-comment">// ["p1","p2"]</span>
+  })
+  .then(<span class="hljs-function">(<span class="hljs-params">msg</span>) =&gt;</span> {
+    <span class="hljs-built_in">console</span>.log( msg );  <span class="hljs-comment">// undefined</span>
+  });
+</div></code></pre>
+<h3 id="promiseraceiterable">Promise.race(iterable)</h3>
+<p>race 方法返回一个 promise ,只要传入的诸多 promise 中的任意一个完成或被拒绝，则该 promise 同样完成或被拒绝，最终值或拒绝原因也与之相同。</p>
+<pre><code class="language-js"><div><span class="hljs-keyword">var</span> p1 = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>) =&gt;</span> { 
+  setTimeout(<span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span> { 
+    resolve(<span class="hljs-number">2</span>) 
+  }, <span class="hljs-number">3000</span>) 
+}) 
+
+<span class="hljs-keyword">var</span> p2 = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function">(<span class="hljs-params">resolve, reject</span>) =&gt;</span> { 
+  setTimeout(<span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span> { 
+    resolve(<span class="hljs-number">3</span>) 
+  }, <span class="hljs-number">2000</span>) 
+}) 
+
+<span class="hljs-built_in">Promise</span>.race([p1, p2])
+  .then( <span class="hljs-function">(<span class="hljs-params">result</span>) =&gt;</span> <span class="hljs-built_in">console</span>.log(result)) <span class="hljs-comment">//2秒后显示3</span>
+  .catch( <span class="hljs-function"><span class="hljs-params">error</span> =&gt;</span> <span class="hljs-built_in">console</span>.log(error.toString()))
+</div></code></pre>
+<h2 id="%E6%A1%88%E4%BE%8B">案例</h2>
+<h3 id="%E4%B8%80%E4%BD%BF%E7%94%A8-promise-%E5%B0%81%E8%A3%85-ajax">一、使用 promise 封装 ajax：</h3>
+<pre><code class="language-js"><div>getData(method, url){
+  <span class="hljs-keyword">var</span> promise = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">resolve, reject</span>)</span>{
+    <span class="hljs-keyword">var</span> xmlHttp = <span class="hljs-keyword">new</span> XMLHttpRequest();
+    xmlHttp.open(method, url);
+    xmlHttp.send();
+    xmlHttp.onload = <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params"></span>) </span>{
+      <span class="hljs-keyword">if</span> (<span class="hljs-keyword">this</span>.status == <span class="hljs-number">200</span> ) {
+        resolve(<span class="hljs-keyword">this</span>.responseText);
+      } <span class="hljs-keyword">else</span> {
+        reject(<span class="hljs-keyword">this</span>.statusText);
+      }
+    };
+    xmlHttp.onerror = <span class="hljs-function"><span class="hljs-keyword">function</span> (<span class="hljs-params"></span>) </span>{
+      reject(<span class="hljs-keyword">this</span>.statusText);
+    };
+  })
+  <span class="hljs-keyword">return</span> promise;
+}
+
+getData(<span class="hljs-string">'get'</span>,<span class="hljs-string">'www.xxx.com'</span>).then(successFun, failFun);
+</div></code></pre>
+<h3 id="%E4%BA%8C%E8%A7%A3%E5%86%B3%E5%9B%9E%E6%8E%89%E5%9C%B0%E7%8B%B1%E7%9A%84%E9%97%AE%E9%A2%98">二、解决回掉地狱的问题</h3>
+<p>如：</p>
+<pre><code class="language-js"><div>$.ajax({ 
+  <span class="hljs-attr">url</span>: <span class="hljs-string">"/api1"</span>, 
+  <span class="hljs-attr">success</span>: <span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params"></span>)</span>{
+    $.ajax({ 
+      <span class="hljs-attr">url</span>: <span class="hljs-string">"/api2"</span>, 
+      <span class="hljs-attr">success</span>: <span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params"></span>)</span>{
+        $.ajax({ 
+          <span class="hljs-attr">url</span>: <span class="hljs-string">"/api3"</span>, 
+          <span class="hljs-attr">success</span>: <span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params"></span>)</span>{
+            <span class="hljs-comment">//</span>
+          }
+        });
+      }
+    });
+  }
+});
+</div></code></pre>
+<p>类似以上这样的回掉嵌套，代码结构很不直观，可读性比较差。然后使用 promise 来改造：</p>
+<pre><code class="language-js"><div><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">p1</span>(<span class="hljs-params"></span>) </span>{
+  <span class="hljs-keyword">var</span> promise = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">resolve,reject</span>) </span>{
+    $.ajax({
+      <span class="hljs-attr">url</span>:<span class="hljs-string">"/api1"</span>,
+      <span class="hljs-attr">success</span>:<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">data</span>) </span>{
+        resolve(data)<span class="hljs-comment">//在异步操作成功时调用</span>
+      }
+    })
+  })
+  <span class="hljs-keyword">return</span> promise
+}
+
+<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">p2</span>(<span class="hljs-params">val</span>) </span>{
+  <span class="hljs-keyword">var</span> promise = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">resolve,reject</span>) </span>{
+    $.ajax({
+      <span class="hljs-attr">url</span>:<span class="hljs-string">"/api2"</span>,
+      <span class="hljs-attr">data</span>:val, <span class="hljs-comment">//来自 p1 的参数</span>
+      success:<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">data</span>) </span>{
+        resolve(data) <span class="hljs-comment">//在异步操作成功时调用</span>
+      }
+    })
+  })
+  <span class="hljs-keyword">return</span> promise
+}
+
+<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">p3</span>(<span class="hljs-params">val</span>) </span>{
+  <span class="hljs-keyword">var</span> promise = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Promise</span>(<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">resolve,reject</span>) </span>{
+    $.ajax({
+      <span class="hljs-attr">url</span>:<span class="hljs-string">"/api3"</span>,
+      <span class="hljs-attr">data</span>:val, <span class="hljs-comment">//来自 p2 的参数</span>
+      success:<span class="hljs-function"><span class="hljs-keyword">function</span>(<span class="hljs-params">data</span>) </span>{
+        resolve(data) <span class="hljs-comment">//在异步操作成功时调用</span>
+      }
+    })
+  })
+  <span class="hljs-keyword">return</span> promise
+}
+
+p1()
+  .then(<span class="hljs-function"><span class="hljs-params">data</span> =&gt;</span> <span class="hljs-keyword">return</span> p2(data))  <span class="hljs-comment">//p1 的结果传给 p2 作为参数</span>
+    .then(<span class="hljs-function"><span class="hljs-params">data</span> =&gt;</span> <span class="hljs-keyword">return</span> p3(data))  <span class="hljs-comment">//p2 的结果传给 p3 作为参数</span>
+      .then(<span class="hljs-function"><span class="hljs-params">data</span> =&gt;</span> <span class="hljs-built_in">console</span>.log(data))
+</div></code></pre>
+
+    </body>
+    </html>
